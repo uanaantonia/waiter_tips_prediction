@@ -1,0 +1,178 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+import seaborn as sns
+
+# Citește datele din fișierul CSV
+data_frame = pd.read_csv(r"C:\Users\Oana\OneDrive\Desktop\tips.csv")
+
+# Afișează denumirile coloanelor
+print("Coloanele din DataFrame sunt:", data_frame.columns)
+
+# Afișează numărul de coloane și numărul de înregistrări
+numar_inregistrari = data_frame.shape[0]
+numar_atribute = data_frame.shape[1]
+print(f'Numărul total de înregistrări este: {numar_inregistrari} fiecare avand: {numar_atribute} atribute')
+
+# Afișează numărul total de elemente
+numar_elemente = data_frame.size
+print(f'Numarul total de elemente este {numar_elemente}')
+
+# Vizualizează primele câteva înregistrări din setul de date
+print(data_frame.head())
+
+# Verifică dacă există valori lipsă
+print(data_frame.isnull().sum())
+
+# Analizează distribuția datelor numerice
+print(data_frame.describe())
+
+# Vizualizează distribuția datelor numerice prin histograme
+data_frame.hist()
+plt.show()
+
+# Analizează relațiile între variabile
+# Exemplu: corelația între Total Bill și Tip
+plt.scatter(data_frame['total_bill'], data_frame['tip'])
+plt.xlabel('total_bill')
+plt.ylabel('tip')
+plt.title('Scatter Plot: Total Bill vs Tip')
+plt.show()
+
+# Vizualizează relațiile între variabilele categorice folosind tabele de contingenta și grafice de bare
+# relația între Sex și Tip
+sns.countplot(x='sex', data=data_frame)
+plt.title('Count of Tips by Sex')
+plt.show()
+
+# relația între Day și Tip
+sns.countplot(x='day', data=data_frame)
+plt.title('Count of Tips by Day')
+plt.show()
+
+# Tratarea valorilor lipsă (dacă există) doar pe coloanele numerice
+data_frame.fillna(data_frame.select_dtypes(include=[np.number]).mean(), inplace=True)
+
+# Stabilirea unui prag pentru numărul maxim de valori unice
+prag_val_unice = 15
+
+# Identificarea coloanelor cu un număr de valori unice mai mic decât pragul ales
+coloane_categoriale = data_frame.columns[data_frame.nunique() <= prag_val_unice].tolist()
+
+print("Coloanele cu variabile categoriale sunt:", coloane_categoriale)
+
+# Vizualizarea valorilor categoriale - grafice
+for coloana in coloane_categoriale:
+    sns.countplot(x=coloana, data=data_frame)
+    plt.title(f'Distribuția pentru {coloana}')
+    plt.ylabel('Numărul de înregistrări')
+    plt.show()
+
+# Identificarea și ștergerea outliers-urilor
+# Copie a DataFrame-ului pentru a păstra originalul nemodificat
+df_fara_outliers = data_frame.copy()
+
+# Lista de caracteristici numerice
+caracteristici_numerice = df_fara_outliers.select_dtypes(include=np.number).columns.tolist()
+
+# Iterează prin fiecare caracteristică numerică și elimină outlierii folosind IQR
+for coloana in caracteristici_numerice:
+    if coloana not in coloane_categoriale:
+        Q1 = df_fara_outliers[coloana].quantile(0.25)
+        Q3 = df_fara_outliers[coloana].quantile(0.75)
+        IQR = Q3 - Q1
+        df_fara_outliers = df_fara_outliers[df_fara_outliers[coloana] <= (Q3 + 1.5 * IQR)]
+        df_fara_outliers = df_fara_outliers[df_fara_outliers[coloana] >= (Q1 - 1.5 * IQR)]
+        df_fara_outliers = df_fara_outliers.reset_index(drop=True)
+
+# Afișarea numărului de înregistrări după eliminarea outlierilor
+print('Numărul de înregistrări după eliminarea outlierilor: ', df_fara_outliers.shape[0])
+
+# Actualizează data_frame cu versiunea fără outliers
+data_frame = df_fara_outliers.copy()
+
+# Stabilirea encoding-ului pentru coloanele categoriale și împărțirea coloanelor dummy encoded
+# Verificare care dintre col din lista de col categoriale este one hot encoded 
+for coloana in coloane_categoriale:
+    if coloana in data_frame.columns and data_frame[coloana].nunique() == 2:
+        o_h_encoded = pd.get_dummies(data_frame[coloana], drop_first=True, prefix=str(coloana), dtype=int)
+        data_frame = pd.concat([data_frame, o_h_encoded], axis=1)
+        data_frame = data_frame.drop(coloana, axis=1)
+        print(f"Coloana '{coloana}' este one-hot encoded.")
+    elif coloana in data_frame.columns:
+        if data_frame[coloana].nunique() > 2:
+            df_dummies = pd.get_dummies(data_frame[coloana], prefix=coloana, dtype=int)
+            data_frame = pd.concat([data_frame, df_dummies], axis=1)
+            data_frame = data_frame.drop(coloana, axis=1)
+            print(f"Coloana '{coloana}' este dummy encoded.")
+
+# Corelația
+# Calculează coeficienții de corelație
+coef_corr = data_frame.corr(numeric_only=True)
+
+# Mărește dimensiunea diagramei (30 inch pe lungime și 25 inch pe lățime)
+plt.figure(figsize=(30, 25))
+
+# Desenează harta de corelație dintre variabilele independente și cea dependentă
+sns.heatmap(coef_corr, annot=True, fmt=".2f", linewidths=.5, vmin=-1, vmax=1, center=0)
+plt.title('Heatmap of Correlation Coefficients')
+plt.show()
+
+# Calculăm media bacșișului pentru fiecare zi a săptămânii
+# Verificăm dacă 'day' este în DataFrame și continuăm doar dacă există
+if 'day' in data_frame.columns:
+    tip_by_day = data_frame.groupby('day')['tip'].mean().reset_index()
+
+    # Vizualizăm media bacșișului în funcție de ziua săptămânii folosind un grafic de bare
+    sns.barplot(x='day', y='tip', data=tip_by_day)
+    plt.title('Average Tip by Day of the Week')
+    plt.xlabel('day')
+    plt.ylabel('tip')
+    plt.show()
+
+# Calculăm media bacșișului pentru fiecare moment al zilei
+# Verificăm dacă 'time' este în DataFrame și continuăm doar dacă există
+if 'time' in data_frame.columns:
+    tip_by_time = data_frame.groupby('time')['tip'].mean().reset_index()
+
+    # Vizualizăm media bacșișului în funcție de momentul zilei folosind un grafic de bare
+    sns.barplot(x='time', y='tip', data=tip_by_time)
+    plt.title('Average Tip by Time of Day')
+    plt.xlabel('time')
+    plt.ylabel('tip')
+    plt.show()
+
+# Pregătim datele pentru antrenament și testare
+X = data_frame[['total_bill']].values
+y = data_frame['tip'].values
+
+# Împărțim setul de date în set de antrenament și set de testare
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
+
+# Antrenăm modelul de regresie liniară
+model = LinearRegression()
+model.fit(X_train, y_train)
+
+# Evaluăm performanța modelului pe setul de antrenament și setul de testare
+r2_train = model.score(X_train, y_train)
+r2_test = model.score(X_test, y_test)
+
+print("R-squared pentru setul de antrenament:", r2_train)
+print("R-squared pentru setul de testare:", r2_test)
+
+# Prezicem valorile pentru setul de antrenament și setul de testare
+y_train_pred = model.predict(X_train)
+y_test_pred = model.predict(X_test)
+
+# Vizualizăm rezultatele folosind un scatter plot
+plt.scatter(X_train, y_train, color='blue', label='Antrenare')
+plt.scatter(X_test, y_test, color='green', label='Testare')
+plt.plot(X_train, y_train_pred, color='red', label='Linia Regresiei Liniare')
+plt.title('Regresia Liniară Simplă: Total Bill vs Tip')
+plt.xlabel('total_bill')
+plt.ylabel('tip')
+plt.legend()
+plt.show()
+
